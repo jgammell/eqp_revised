@@ -1,110 +1,149 @@
-import urllib
-import gzip
 import os
-import pickle
 import numpy as np
 import torch
+import torchvision
+import sklearn.datasets
 
-class MNIST:
-    def __init__(self, batch_size, device):
-        self.name = 'MNIST'
-        self.dimensions = (28**2, 10)
-        self.n_batches_train = int(60000/batch_size)
-        self.n_batches_test = int(10000/batch_size)
-        filepath = os.path.join(os.getcwd(), '..', 'datasets', 'mnist')
-        filename = 'mnist.pkl.gz'
-        if not(os.path.exists(os.path.join(filepath, filename))):
-            urllib.request.urlretrieve('http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz', os.path.join(filepath, filename))
-        with gzip.open(os.path.join(filepath, filename), 'rb') as F:
-            (x_train, y_train), (x_validate, y_validate), (x_test, y_test) = pickle.load(F, encoding='latin1')
-        x = list(x_train) + list(x_validate) + list(x_test)
-        y = list(y_train) + list(y_validate) + list(y_test)
-        for i, yy in zip(range(len(y)), y):
-            v = np.zeros((1, 10))
-            v[0][yy] = 1
-            y[i] = v
-        x = [torch.from_numpy(xx).squeeze().to(device) for xx in x]
-        y = [torch.from_numpy(yy).squeeze().to(device) for yy in y]
-        self.training_batches = []
-        self.test_batches = []
-        self.training_index = 0
-        self.test_index = 0
-        for batch in range(self.n_batches_train):
-            self.training_batches.append(
-                [[torch.stack(x[batch_size*batch:batch_size*(batch+1)], dim=0).float(),
-                  torch.stack(y[batch_size*batch:batch_size*(batch+1)], dim=0).float()],
-                  batch])
-        for batch in range(self.n_batches_train, self.n_batches_train+self.n_batches_test):
-            self.test_batches.append(
-                [[torch.stack(x[batch_size*batch:batch_size*(batch+1)], dim=0).float(),
-                  torch.stack(y[batch_size*batch:batch_size*(batch+1)], dim=0).float()],
-                  batch])
-    
-    def get_training_batch(self):
-        rv = self.training_batches[self.training_index]
-        self.training_index = (self.training_index+1)%(self.n_batches_train)
+class Dataset:
+    def __init__(self):
+        assert len(self.x_train) == len(self.y_train)
+        assert len(self.x_test) == len(self.y_test)
+        self.n_trainb = len(self.x_train)
+        self.n_testb = len(self.x_test)
+        self.train_idx = 0
+        self.test_idx = 0
+    def next_training_batch(self):
+        rv = (self.x_train[self.train_idx], self.y_train[self.train_idx])
+        self.train_idx = (self.train_idx+1)%(self.n_trainb)
         return rv
-    
-    def get_test_batch(self):
-        rv = self.test_batches[self.test_index]
-        self.test_index = (self.test_index+1)%(self.n_batches_test)
+    def next_test_batch(self):
+        rv = (self.x_test[self.test_idx], self.y_test[self.test_idx])
+        self.test_idx = (self.test_idx+1)%(self.n_testb)
         return rv
 
-class Fashion_MNIST:
+class MNIST(Dataset):
     def __init__(self, batch_size, device):
         self.name = 'MNIST'
-        self.dimensions = (28**2, 10)
-        self.n_batches_train = int(60000/batch_size)
-        self.n_batches_test = int(10000/batch_size)
-        filepath = os.path.join(os.getcwd(), '..', 'datasets', 'fashion_mnist')
-        filenames = ['train-images-idx3-ubyte.gz',
-                     'train-labels-idx1-ubyte.gz', 
-                     't10k-images-idx3-ubyte.gz', 
-                     't10k-labels-idx1-ubyte.gz']
-        urls = ['http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/train-images-idx3-ubyte.gz',
-                'http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/train-labels-idx1-ubyte.gz',
-                'http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/t10k-images-idx3-ubyte.gz',
-                'http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/t10k-labels-idx1-ubyte.gz']
-        for filename, url in zip(filenames, urls):
-            if not(os.path.exists(os.path.join(filepath, filename))):
-                urllib.request.urlretrieve(url, os.path.join(filepath, filename))
-            with gzip.open(
-        if not(os.path.exists(os.path.join(filepath, filename))):
-            urllib.request.urlretrieve('http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz', os.path.join(filepath, filename))
-        with gzip.open(os.path.join(filepath, filename), 'rb') as F:
-            (x_train, y_train), (x_validate, y_validate), (x_test, y_test) = pickle.load(F, encoding='latin1')
-        x = list(x_train) + list(x_validate) + list(x_test)
-        y = list(y_train) + list(y_validate) + list(y_test)
-        for i, yy in zip(range(len(y)), y):
-            v = np.zeros((1, 10))
-            v[0][yy] = 1
-            y[i] = v
-        x = [torch.from_numpy(xx).squeeze().to(device) for xx in x]
-        y = [torch.from_numpy(yy).squeeze().to(device) for yy in y]
-        self.training_batches = []
-        self.test_batches = []
-        self.training_index = 0
-        self.test_index = 0
-        for batch in range(self.n_batches_train):
-            self.training_batches.append(
-                [[torch.stack(x[batch_size*batch:batch_size*(batch+1)], dim=0).float(),
-                  torch.stack(y[batch_size*batch:batch_size*(batch+1)], dim=0).float()],
-                  batch])
-        for batch in range(self.n_batches_train, self.n_batches_train+self.n_batches_test):
-            self.test_batches.append(
-                [[torch.stack(x[batch_size*batch:batch_size*(batch+1)], dim=0).float(),
-                  torch.stack(y[batch_size*batch:batch_size*(batch+1)], dim=0).float()],
-                  batch])
-    
-    def get_training_batch(self):
-        rv = self.training_batches[self.training_index]
-        self.training_index = (self.training_index+1)%(self.n_batches_train)
-        return rv
-    
-    def get_test_batch(self):
-        rv = self.test_batches[self.test_index]
-        self.test_index = (self.test_index+1)%(self.n_batches_test)
-        return rv
-            
-            
-            
+        self.n_in = 28**2
+        self.n_out = 10
+        self.batch_size = batch_size
+        training_examples = torchvision.datasets.MNIST(
+                root=os.path.join(os.getcwd(), 'datasets'),
+                train=True,
+                download=True,
+                transform=torchvision.transforms.ToTensor(),
+                target_transform=None)
+        training_loader = torch.utils.data.DataLoader(dataset=training_examples, batch_size=batch_size, shuffle=False)
+        raw_data = [out for out in training_loader]
+        np.random.shuffle(raw_data)
+        self.x_train = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
+        self.y_train = []
+        for [_, y] in raw_data:
+            self.y_train.append(torch.zeros([batch_size, 10]))
+            for n in range(len(y)):
+                self.y_train[-1][n, y[n]] = 1
+        test_examples = torchvision.datasets.MNIST(
+                root=os.path.join(os.getcwd(), 'datasets'),
+                train=False,
+                download=True,
+                transform=torchvision.transforms.ToTensor(),
+                target_transform=None)
+        test_loader = torch.utils.data.DataLoader(dataset=test_examples, batch_size=batch_size, shuffle=False)
+        raw_data = [out for out in test_loader]
+        self.x_test = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
+        self.y_test = []
+        for [_, y] in raw_data:
+            self.y_test.append(torch.zeros([batch_size, 10]).to(device))
+            for n in range(len(y)):
+                self.y_test[-1][n, y[n]] = 1
+        Dataset.__init__(self)
+
+class FashionMNIST(Dataset):
+    def __init__(self, batch_size, device):
+        self.name = 'Fashion MNIST'
+        self.n_in = 28**2
+        self.n_out = 10
+        self.batch_size = batch_size
+        training_examples = torchvision.datasets.FashionMNIST(
+                root=os.path.join(os.getcwd(), 'datasets'),
+                train=True,
+                download=True,
+                transform=torchvision.transforms.ToTensor(),
+                target_transform=None)
+        training_loader = torch.utils.data.DataLoader(dataset=training_examples, batch_size=batch_size, shuffle=False)
+        raw_data = [out for out in training_loader]
+        np.random.shuffle(raw_data)
+        self.x_train = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
+        self.y_train = []
+        for [_, y] in raw_data:
+            self.y_train.append(torch.zeros([batch_size, 10]))
+            for n in range(len(y)):
+                self.y_train[-1][n, y[n]] = 1
+        test_examples = torchvision.datasets.FashionMNIST(
+                root=os.path.join(os.getcwd(), 'datasets'),
+                train=False,
+                download=True,
+                transform=torchvision.transforms.ToTensor(),
+                target_transform=None)
+        test_loader = torch.utils.data.DataLoader(dataset=test_examples, batch_size=batch_size, shuffle=False)
+        raw_data = [out for out in test_loader]
+        self.x_test = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
+        self.y_test = []
+        for [_, y] in raw_data:
+            self.y_test.append(torch.zeros([batch_size, 10]).to(device))
+            for n in range(len(y)):
+                self.y_test[-1][n, y[n]] = 1
+        Dataset.__init__(self)
+
+class Diabetes(Dataset):
+    def __init__(self, batch_size, device):
+        assert batch_size <= 42
+        self.name = 'Diabetes'
+        self.n_in = 10
+        self.n_out = 1
+        self.batch_size = batch_size
+        (x_raw, y_raw) = sklearn.datasets.load_diabetes(return_X_y=True, as_frame=False)
+        np.random.shuffle(x_raw)
+        np.random.shuffle(y_raw)
+        self.x_train = []
+        self.y_train = []
+        for idx in np.arange(int(400/batch_size)):
+            x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            self.x_train.append(torch.from_numpy(x_batch).to(device))
+            self.y_train.append(torch.from_numpy(y_batch).to(device))
+        self.x_test = []
+        self.y_test = []
+        for idx in np.arange(int(400/batch_size), int(442/batch_size)):
+            x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            self.x_test.append(x_batch)
+            self.y_test.append(y_batch)
+        Dataset.__init__(self)
+
+class Wine(Dataset):
+    def __init__(self, batch_size, device):
+        assert batch_size <= 28
+        self.name = 'Wine'
+        self.n_in = 13
+        self.n_out = 3
+        self.batch_size = batch_size
+        (x_raw, y_raw) = sklearn.datasets.load_wine(return_X_y=True, as_frame=False)
+        np.random.shuffle(x_raw)
+        np.random.shuffle(y_raw)
+        self.x_train = []
+        self.y_train = []
+        for idx in np.arange(int(150/batch_size)):
+            x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            self.x_train.append(torch.from_numpy(x_batch).to(device))
+            self.y_train.append(torch.from_numpy(y_batch).to(device))
+        self.x_test = []
+        self.y_test = []
+        for idx in np.arange(int(150/batch_size), int(178/batch_size)):
+            x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
+            self.x_test.append(x_batch)
+            self.y_test.append(y_batch)
+        Dataset.__init__(self)
+        

@@ -20,8 +20,6 @@ hyperparameters = \
 configuration = \
 {
   'batch size': ,
-  'training examples': ,
-  'test examples': ,
   'device': ,
   'seed': 
 }

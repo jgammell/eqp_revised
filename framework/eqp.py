@@ -72,18 +72,10 @@ class Network:
         self.weakly_clamped_iterations = hyperparameters['weakly clamped iterations']
         assert type(configuration['batch size']) == int
         assert configuration['batch size'] > 0
-        assert type(configuration['training examples']) == int
-        assert configuration['training examples'] > 0
-        assert type(configuration['test examples']) == int
-        assert configuration['test examples'] > 0
-        assert (configuration['training examples'] % configuration['batch size']) == 0
-        assert (configuration['test examples'] % configuration['batch size']) == 0
         self.batch_size = configuration['batch size']
-        self.training_examples = configuration['training examples']
-        self.test_examples = configuration['test examples']
         assert configuration['device'] in ['cpu', 'CUDA:0']
         self.device = configuration['device']
-        assert dataset in [datasets.MNIST]
+        assert dataset in [datasets.MNIST, datasets.FashionMNIST, datasets.Diabetes, datasets.Wine]
         assert type(configuration['seed']) == int
         assert configuration['seed'] >= 0
         self.seed = configuration['seed']
@@ -107,6 +99,11 @@ class Network:
         np.random.seed(seed=self.seed)
         print('\t\tCompleted successfully')
         print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\tInitializing dataset...')
+        t1 = time.time_ns()
+        self.dataset = dataset(self.batch_size, self.device)
+        print('\t\tCompleted successfully.')
+        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
         print('\tInitializing state...')
         t1 = time.time_ns()
         self.initialize_state()
@@ -127,11 +124,6 @@ class Network:
         self.initialize_biases()
         print('\t\tCompleted successfully')
         print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
-        print('\tInitializing dataset...')
-        t1 = time.time_ns()
-        self.dataset = dataset(self.batch_size, self.device)
-        print('\t\tCompleted successfully.')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
         print('\tCompleted successfully.')
         print('\tTime taken: %s'%(ttos(time.time_ns()-t0)))
         print('Network initialized successfully.')
@@ -144,9 +136,15 @@ class Network:
         print('\tBeta: %f'%(self.beta))
         print('\tFree iterations: %d'%(self.free_iterations))
         print('\tWeakly-clamped iterations: %d'%(self.weakly_clamped_iterations))
+        print('\tDataset: %s'%(self.dataset.name))
+        print('\t\tInput: %d'%(self.dataset.n_in))
+        print('\t\tOutput: %d'%(self.dataset.n_out))
+        print('\t\tTraining batches: %d'%(self.dataset.n_trainb))
+        print('\t\tTest batches: %d'%(self.dataset.n_testb))
+        print('\t\tBatch size: %d'%(self.dataset.batch_size))
         print('\tBatch size: %d'%(self.batch_size))
-        print('\tTraining examples: %d'%(self.training_examples))
-        print('\tTest examples: %d'%(self.test_examples))
+        #print('\tTraining examples: %d'%(self.training_examples))
+        #print('\tTest examples: %d'%(self.test_examples))
         print('\tDevice: %s'%(self.device))
         print('\tSeed: %d'%(self.seed))
         print('\tState:')
@@ -172,7 +170,7 @@ class Network:
     def initialize_persistent_particles(self):
         self.persistent_particles = [
             torch.zeros(self.s[:, self.ihy].shape, dtype=torch.float32).to(self.device)
-            for _ in range(int((self.training_examples+self.test_examples)/self.batch_size))]
+            for _ in range(self.dataset.n_trainb + self.dataset.n_testb)]
     def initialize_weight_matrices(self):
         self.rng = np.random.RandomState(seed=self.seed)
         W = np.zeros((self.num_neurons, self.num_neurons), dtype=np.float32)
@@ -192,6 +190,7 @@ class Network:
                     assert W_mask[row, col] == 0
                     potential_conn_indices.append([row, col])
         self.p_actual = 0
+        initial_length = 1
         if self.network_type == 'MLFF':
             pass
         elif self.network_type == 'SW_intra':
