@@ -8,7 +8,7 @@ import numpy as np
 
 topology = \
 {
-    'layer sizes': [13, 5, 5, 5, 5, 5, 3],
+    'layer sizes': [10, 5, 5, 5, 5, 5, 1],
     'network type': 'SW_intra',
     'bypass p': .1,
     'bypass mag': .05
@@ -28,7 +28,7 @@ configuration = \
     'seed': 0
 }
 
-Network = eqp.Network(topology, hyperparameters, configuration, datasets.Wine)
+Network = eqp.Network(topology, hyperparameters, configuration, datasets.Diabetes)
 (fig, ax) = plt.subplots(1, 2)
 ax[0].imshow(np.abs(Network.W.squeeze().numpy()), vmin=0, vmax=.1*torch.max(torch.abs(Network.W)))
 ax[1].imshow(Network.W_mask.squeeze().numpy(), vmin=0, vmax=1)
@@ -37,4 +37,9 @@ fig.savefig(os.path.join(os.getcwd(), 'results', 'validate_code_figures', 'weigh
 for i, conn in zip(range(len(Network.interlayer_connections)), Network.interlayer_connections):
     ax[i].imshow(conn.squeeze().numpy(), vmin=0, vmax=1)
 fig.savefig(os.path.join(os.getcwd(), 'results', 'validate_code_figures', 'connection_masks.jpg'), quality=100)
+for i in range(5):
+    Network.train_epoch()
+    Network.calculate_test_error()
+    print('Training error:', Network.training_error)
+    print('Test error:', Network.test_error)
 

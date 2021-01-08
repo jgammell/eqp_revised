@@ -15,11 +15,11 @@ class Dataset:
     def next_training_batch(self):
         rv = (self.x_train[self.train_idx], self.y_train[self.train_idx])
         self.train_idx = (self.train_idx+1)%(self.n_trainb)
-        return rv
+        return (self.train_idx, rv)
     def next_test_batch(self):
         rv = (self.x_test[self.test_idx], self.y_test[self.test_idx])
         self.test_idx = (self.test_idx+1)%(self.n_testb)
-        return rv
+        return (self.n_trainb + self.test_idx, rv)
 
 class MNIST(Dataset):
     def __init__(self, batch_size, device):
@@ -27,6 +27,7 @@ class MNIST(Dataset):
         self.n_in = 28**2
         self.n_out = 10
         self.batch_size = batch_size
+        self.classification = True
         training_examples = torchvision.datasets.MNIST(
                 root=os.path.join(os.getcwd(), 'datasets'),
                 train=True,
@@ -64,6 +65,7 @@ class FashionMNIST(Dataset):
         self.n_in = 28**2
         self.n_out = 10
         self.batch_size = batch_size
+        self.classification = True
         training_examples = torchvision.datasets.FashionMNIST(
                 root=os.path.join(os.getcwd(), 'datasets'),
                 train=True,
@@ -102,7 +104,13 @@ class Diabetes(Dataset):
         self.n_in = 10
         self.n_out = 1
         self.batch_size = batch_size
+        self.classification = False
         (x_raw, y_raw) = sklearn.datasets.load_diabetes(return_X_y=True, as_frame=False)
+        for idx in range(len(x_raw)):
+            x_raw[idx] -= np.min(x_raw[idx])
+            x_raw[idx] /= np.max(x_raw[idx])
+        y_raw -= np.min(y_raw)
+        y_raw /= np.max(y_raw)
         np.random.shuffle(x_raw)
         np.random.shuffle(y_raw)
         self.x_train = []
@@ -111,7 +119,7 @@ class Diabetes(Dataset):
             x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
             y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
             self.x_train.append(torch.from_numpy(x_batch).to(device))
-            self.y_train.append(torch.from_numpy(y_batch).to(device))
+            self.y_train.append(torch.from_numpy(y_batch).to(device).unsqueeze(1))
         self.x_test = []
         self.y_test = []
         for idx in np.arange(int(400/batch_size), int(442/batch_size)):
@@ -128,7 +136,13 @@ class Wine(Dataset):
         self.n_in = 13
         self.n_out = 3
         self.batch_size = batch_size
+        self.classification = True
         (x_raw, y_raw) = sklearn.datasets.load_wine(return_X_y=True, as_frame=False)
+        for idx in range(len(x_raw)):
+            x_raw[idx] -= np.min(x_raw[idx])
+            x_raw[idx] /= np.max(x_raw[idx])
+            y_raw[idx] -= np.min(y_raw[idx])
+            y_raw[idx] /= np.max(y_raw[idx])
         np.random.shuffle(x_raw)
         np.random.shuffle(y_raw)
         self.x_train = []

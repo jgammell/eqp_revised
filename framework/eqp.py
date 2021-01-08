@@ -142,9 +142,8 @@ class Network:
         print('\t\tTraining batches: %d'%(self.dataset.n_trainb))
         print('\t\tTest batches: %d'%(self.dataset.n_testb))
         print('\t\tBatch size: %d'%(self.dataset.batch_size))
+        print('\t\tClassification: %r'%(self.dataset.classification))
         print('\tBatch size: %d'%(self.batch_size))
-        #print('\tTraining examples: %d'%(self.training_examples))
-        #print('\tTest examples: %d'%(self.test_examples))
         print('\tDevice: %s'%(self.device))
         print('\tSeed: %d'%(self.seed))
         print('\tState:')
@@ -165,12 +164,23 @@ class Network:
         for conn in self.interlayer_connections:
             assert conn.shape == self.interlayer_connections[0].shape
         print('\t\tInterlayer connection mask shape: ' + ' x '.join([str(val) for val in self.interlayer_connections[0].shape]))
+
     def initialize_state(self):
         self.s = torch.zeros(self.batch_size, self.num_neurons, dtype=torch.float32).to(self.device)
+
     def initialize_persistent_particles(self):
         self.persistent_particles = [
             torch.zeros(self.s[:, self.ihy].shape, dtype=torch.float32).to(self.device)
             for _ in range(self.dataset.n_trainb + self.dataset.n_testb)]
+    
+    def use_persistent_particle(self, index):
+        assert 0 <= index < len(self.persistent_particles)
+        self.s[:, self.ihy] = self.persistent_particles[index].clone()
+    
+    def update_persistent_particle(self, index):
+        assert 0 <= index < len(self.persistent_particles)
+        self.persistent_particles[index] = self.s[:, self.ihy].clone()
+
     def initialize_weight_matrices(self):
         self.rng = np.random.RandomState(seed=self.seed)
         W = np.zeros((self.num_neurons, self.num_neurons), dtype=np.float32)
@@ -262,6 +272,126 @@ class Network:
         
     def initialize_biases(self):
         self.B = torch.zeros(self.s.shape).to(self.device)
+        
+    def set_x_state(self, x):
+        assert x.shape == self.s[:, self.ix].shape
+        self.s[:, self.ix] = x
+    
+    def set_y_state(self, y):
+        assert y.shape == self.s[:, self.iy].shape
+        self.s[:, self.iy] = y
+    
+    def calc_E(self):
+        term1 = .5*torch.sum(self.s*self.s, dim=1)
+        rho_s = rho(self.s)
+        term2 = torch.matmul(rho_s.unsqueeze(2), rho_s.unsqueeze(1))
+        term2 *= self.W
+        term2 = -.5*torch.sum(term2, dim=[1, 2])
+        term3 = -np.sum([self.B[i]*rho(s[i]) for i in range(len(b))])
+        return term1 + term2 + term3
+    
+    def calc_C(self, y_target):
+        y = self.s[:, self.iy]
+        return .5*torch.norm(y-y_target, dim=1)**2
+    
+    def calc_F(self, y_target):
+        return self.calc_E() + self.beta*self.calc_C(y_target)
+        
+    def step_free(self, y):
+        Rs = (rho(self.s)@self.W).squeeze()
+        dEds = self.epsilon*(Rs+self.B-rho(self.s))
+        dEds[:, self.ix] = 0
+        self.s += dEds
+        torch.clamp(self.s, 0, 1, out=self.s)
+    
+    def step_weakly_clamped(self, y):
+        Rs = (rho(self.s)@self.W).squeeze()
+        dEds = self.epsilon*(Rs+self.B-rho(self.s))
+        dEds[:, self.ix] = 0
+        self.s += dEds
+        dCds = self.epsilon*self.beta*(y-self.s[:, self.iy])
+        self.s[:, self.iy] += 2*dCds
+        torch.clamp(self.s, 0, 1, out=self.s)
+        
+    def evolve_to_equilibrium(self, phase, y=None):
+        if phase == 'free':
+            iterations = self.free_iterations
+            step = self.step_free
+        elif phase == 'weakly-clamped':
+            iterations = self.weakly_clamped_iterations
+            step = self.step_weakly_clamped
+        else:
+            assert False
+        for iteration in np.arange(iterations):
+            step(y)
+    
+    def calculate_weight_update(self, s_free_phase, s_clamped_phase):
+        term1 = torch.unsqueeze(rho(s_clamped_phase), dim=2)@torch.unsqueeze(rho(s_clamped_phase), dim=1)
+        term2 = torch.unsqueeze(rho(s_free_phase), dim=2)@torch.unsqueeze(rho(s_free_phase), dim=1)
+        dW = (1/self.beta)*(term1-term2)
+        dW *= self.W_mask
+        self.dW = torch.mean(dW, dim=0).unsqueeze(0)
+    
+    def calculate_bias_update(self, s_free_phase, s_clamped_phase):
+        dB = (1/self.beta)*(rho(s_clamped_phase)-rho(s_free_phase))
+        dB[:, self.ix] = 0
+        self.dB = torch.mean(dB, dim=0).unsqueeze(0)
+    
+    def train_batch(self, x, y, index, classification=False):
+        self.use_persistent_particle(index)
+        self.set_x_state(x)
+        self.evolve_to_equilibrium('free')
+        self.s_free_phase = self.s.clone()
+        self.update_persistent_particle(index)
+        n_correct = None
+        if classification:
+            n_correct = int(torch.eq(torch.argmax(self.s[:, self.iy], dim=1), torch.argmax(y, dim=1)).sum())
+        cost = float(torch.mean(self.calc_C(y)))
+        assert torch.norm(self.s[:, self.ix]-x) <= 1e-5
+        assert torch.norm(self.W - (torch.tril(self.W, diagonal=-1) + torch.tril(self.W, diagonal=-1).transpose(1, 2))) == 0
+        assert torch.norm(self.W - (self.W*self.W_mask)) == 0
+        if np.random.randint(0, 2):
+            self.beta *= -1
+        self.evolve_to_equilibrium('weakly-clamped', y)
+        self.s_clamped_phase = self.s.clone()
+        self.calculate_weight_update(self.s_free_phase, self.s_clamped_phase)
+        self.calculate_bias_update(self.s_free_phase, self.s_clamped_phase)
+        self.W += self.learning_rate*self.dW
+        self.B += self.learning_rate*self.dB
+        return (cost, n_correct)
+    
+    def train_next_batch(self):
+        (index, (x, y)) = self.dataset.next_training_batch()
+        (cost, n_correct) = self.train_batch(x, y, index, self.dataset.classification)
+        return n_correct if self.dataset.classification else cost
+        
+    def train_epoch(self):
+        self.mean_dW = torch.zeros(self.W.shape)
+        self.training_error = 0
+        for batch in range(self.dataset.n_trainb):
+            error = self.train_next_batch()
+            if self.dataset.classification:
+                self.training_error += (self.batch_size-error)
+            else:
+                self.training_error += error
+            self.mean_dW = self.dW/(batch+1) + (batch/(batch+1))*self.mean_dW
+        self.training_error /= self.dataset.n_trainb
+    
+    def calculate_test_error(self):
+        self.test_error = 0
+        for batch in range(self.dataset.n_testb):
+            (index, (x, y)) = self.dataset.next_training_batch()
+            self.set_x_state(x)
+            self.use_persistent_particle(index)
+            self.evolve_to_equilibrium('free')
+            self.update_persistent_particle(index)
+            if self.dataset.classification:
+                self.test_error += int(torch.eq(torch.argmax(self.s[:, self.iy], dim=1), torch.argmax(y, dim=1)).sum())
+            else:
+                self.test_error += float(torch.mean(self.calc_C(y)))
+        if self.dataset.classification:
+            self.test_error = 1 - (self.test_error/self.dataset.n_testb)
+        
         
         
         
