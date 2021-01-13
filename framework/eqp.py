@@ -73,7 +73,7 @@ class Network:
         assert type(configuration['batch size']) == int
         assert configuration['batch size'] > 0
         self.batch_size = configuration['batch size']
-        assert configuration['device'] in ['cpu', 'CUDA:0']
+        assert configuration['device'] in ['cpu', 'CUDA:0', 'cuda']
         self.device = configuration['device']
         assert dataset in [datasets.MNIST, datasets.FashionMNIST, datasets.Diabetes, datasets.Wine]
         assert type(configuration['seed']) == int
