@@ -35,7 +35,7 @@ class Network:
         torch.set_printoptions(precision=2, linewidth=320)
 
         print('Parsing network settings...')
-        t0 = time.time_ns()
+        t0 = 1e9*time.time()
         assert type(topology['layer sizes'] == list)
         for ls in topology['layer sizes']:
             assert type(ls) == int
@@ -80,11 +80,11 @@ class Network:
         assert configuration['seed'] >= 0
         self.seed = configuration['seed']
         print('\tCompleted successfully')
-        print('\tTime taken: %s'%(ttos(time.time_ns()-t0)))
+        print('\tTime taken: %s'%(ttos((1e9*time.time())-t0)))
         print('Initializing network...')
-        t0 = time.time_ns()
+        t0 = 1e9*time.time()
         print('\tInitializing indices...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         self.layer_indices = np.cumsum([0] + self.layer_sizes)
         self.num_neurons = np.sum(self.layer_sizes)
         self.ix = slice(0, self.layer_indices[1])
@@ -92,40 +92,40 @@ class Network:
         self.iy = slice(self.layer_indices[-2], self.layer_indices[-1])
         self.ihy = slice(self.layer_indices[1], self.layer_indices[-1])
         print('\t\tCompleted successfully')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tInitializing seeds...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         torch.manual_seed(seed=self.seed)
         np.random.seed(seed=self.seed)
         print('\t\tCompleted successfully')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tInitializing dataset...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         self.dataset = dataset(self.batch_size, self.device)
         print('\t\tCompleted successfully.')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tInitializing state...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         self.initialize_state()
         print('\t\tCompleted successfully')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tInitializing persistent particles...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         self.initialize_persistent_particles()
         print('\t\tCompleted successfully')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tInitializing weights...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         self.initialize_weight_matrices()
         print('\t\tCompleted successfully')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tInitializing biases...')
-        t1 = time.time_ns()
+        t1 = 1e9*time.time()
         self.initialize_biases()
         print('\t\tCompleted successfully')
-        print('\t\tTime taken: %s'%(ttos(time.time_ns()-t1)))
+        print('\t\tTime taken: %s'%(ttos((1e9*time.time())-t1)))
         print('\tCompleted successfully.')
-        print('\tTime taken: %s'%(ttos(time.time_ns()-t0)))
+        print('\tTime taken: %s'%(ttos((1e9*time.time())-t0)))
         print('Network initialized successfully.')
         print('\tLayer sizes: %s'%('-'.join([str(val) for val in self.layer_sizes])))
         print('\tNetwork type: %s'%(self.network_type))
@@ -208,8 +208,8 @@ class Network:
                 assert np.linalg.norm(W_mask[i:j, i:j], ord='fro') == 0
                 W_mask[i:j, i:j] = 1
             existing_conn_indices = []
-            for row in range(1, W_mask.shape[0]):
-                for col in range(row):
+            for col in range(W_mask.shape[0]):
+                for row in range(col, W_mask.shape[0]):
                     if W_mask[row, col] != 0:
                         assert W_mask[row, col] == 1
                         existing_conn_indices.append([row, col])
@@ -345,8 +345,8 @@ class Network:
         self.update_persistent_particle(index)
         n_correct = None
         if classification:
-            n_correct = int(torch.eq(torch.argmax(self.s[:, self.iy], dim=1), torch.argmax(y, dim=1)).sum())
-        cost = float(torch.mean(self.calc_C(y)))
+            n_correct = int(torch.eq(torch.argmax(self.s[:, self.iy], dim=1), torch.argmax(y, dim=1)).sum().cpu())
+        cost = float(torch.mean(self.calc_C(y)).cpu())
         assert torch.norm(self.s[:, self.ix]-x) <= 1e-5
         assert torch.norm(self.W - (torch.tril(self.W, diagonal=-1) + torch.tril(self.W, diagonal=-1).transpose(1, 2))) == 0
         assert torch.norm(self.W - (self.W*self.W_mask)) == 0
@@ -366,7 +366,7 @@ class Network:
         return n_correct if self.dataset.classification else cost
         
     def train_epoch(self):
-        self.mean_dW = torch.zeros(self.W.shape)
+        self.mean_dW = torch.zeros(self.W.shape).to(self.device)
         self.training_error = 0
         for batch in range(self.dataset.n_trainb):
             error = self.train_next_batch()
@@ -375,12 +375,13 @@ class Network:
             else:
                 self.training_error += error
             self.mean_dW = self.dW/(batch+1) + (batch/(batch+1))*self.mean_dW
-        self.training_error /= self.dataset.n_trainb
+            #print('\tBatch %d complete.'%(batch+1))
+        self.training_error /= (self.dataset.n_trainb*self.batch_size)
     
     def calculate_test_error(self):
         self.test_error = 0
         for batch in range(self.dataset.n_testb):
-            (index, (x, y)) = self.dataset.next_training_batch()
+            (index, (x, y)) = self.dataset.next_test_batch()
             self.set_x_state(x)
             self.use_persistent_particle(index)
             self.evolve_to_equilibrium('free')
@@ -390,7 +391,7 @@ class Network:
             else:
                 self.test_error += float(torch.mean(self.calc_C(y)))
         if self.dataset.classification:
-            self.test_error = 1 - (self.test_error/self.dataset.n_testb)
+            self.test_error = 1 - (self.test_error/(self.dataset.n_testb*self.batch_size))
         
         
         

@@ -1,7 +1,5 @@
 import os
-print(os.getcwd())
 os.chdir(os.path.join(os.getcwd(), '..'))
-print(os.getcwd())
 from framework import eqp
 from framework import datasets
 from matplotlib import pyplot as plt
@@ -14,7 +12,7 @@ filepath = os.path.join(os.getcwd(), 'results', 'mnist0')
 
 topology = \
 {
-    'layer sizes': [10, 5, 5, 5, 1],#[28**2, 500, 500, 500, 10],
+    'layer sizes': [28**2, 500, 500, 500, 10],
     'network type': 'MLFF',
     'bypass p': .0756,
     'bypass mag': .05
@@ -30,7 +28,7 @@ hyperparameters = \
 configuration = \
 {
     'batch size': 20,
-    'device': 'cuda',
+    'device': 'cuda:0',
     'seed': 0
 }
 
@@ -42,7 +40,7 @@ test_errors = []
 n_epochs = 1
 rate_period = 1
 correction_period = 10
-Network = eqp.Network(topology, hyperparameters, configuration, datasets.Diabetes)
+Network = eqp.Network(topology, hyperparameters, configuration, datasets.MNIST)
 
 initial_W = Network.W.clone().cpu().squeeze().numpy()
 initial_W_mask = Network.W.clone().cpu().squeeze().numpy()

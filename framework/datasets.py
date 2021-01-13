@@ -40,7 +40,7 @@ class MNIST(Dataset):
         self.x_train = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
         self.y_train = []
         for [_, y] in raw_data:
-            self.y_train.append(torch.zeros([batch_size, 10]))
+            self.y_train.append(torch.zeros([batch_size, 10]).to(device))
             for n in range(len(y)):
                 self.y_train[-1][n, y[n]] = 1
         test_examples = torchvision.datasets.MNIST(
@@ -78,7 +78,7 @@ class FashionMNIST(Dataset):
         self.x_train = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
         self.y_train = []
         for [_, y] in raw_data:
-            self.y_train.append(torch.zeros([batch_size, 10]))
+            self.y_train.append(torch.zeros([batch_size, 10]).to(device))
             for n in range(len(y)):
                 self.y_train[-1][n, y[n]] = 1
         test_examples = torchvision.datasets.FashionMNIST(
