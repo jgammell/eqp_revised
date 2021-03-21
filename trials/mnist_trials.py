@@ -1,5 +1,9 @@
 import os
+print(os.getcwd())
 os.chdir(os.path.join(os.getcwd(), '..'))
+print(os.getcwd())
+import sys
+sys.path.append(os.getcwd())
 from framework import eqp
 from framework import datasets
 from matplotlib import pyplot as plt
@@ -7,28 +11,31 @@ import torch
 import numpy as np
 import time
 import pickle
-
-filepath = os.path.join(os.getcwd(), 'results', 'mnist0')
+filepath = os.path.join(os.getcwd(), 'results', 'diabetes_5layer_SW')
+import sys
+old_stdout = sys.stdout
+log_file = open(os.path.join(filepath, 'log.txt'), 'a')
+sys.stdout = log_file
 
 topology = \
 {
-    'layer sizes': [28**2, 500, 500, 500, 10],
-    'network type': 'MLFF',
+    'layer sizes': [10, 10, 10, 10, 10, 10, 1],
+    'network type': 'SW_intra',
     'bypass p': .0756,
-    'bypass mag': .05
+    'bypass mag': .579
 }
 hyperparameters = \
 {
-    'learning rate': .02,
+    'learning rate': .01,
     'epsilon': .5,
     'beta': 1.0,
-    'free iterations': 500,
-    'weakly clamped iterations': 8
+    'free iterations': 1000,
+    'weakly clamped iterations': 12
 }
 configuration = \
 {
-    'batch size': 20,
-    'device': 'cuda:0',
+    'batch size': 5,
+    'device': 'cuda',
     'seed': 0
 }
 
@@ -37,13 +44,13 @@ correction_matrices = []
 training_errors = []
 test_errors = []
 
-n_epochs = 1
+n_epochs = 100
 rate_period = 1
 correction_period = 10
-Network = eqp.Network(topology, hyperparameters, configuration, datasets.MNIST)
+Network = eqp.Network(topology, hyperparameters, configuration, datasets.Diabetes)
 
 initial_W = Network.W.clone().cpu().squeeze().numpy()
-initial_W_mask = Network.W.clone().cpu().squeeze().numpy()
+initial_W_mask = Network.W_mask.clone().cpu().squeeze().numpy()
 
 with open(os.path.join(filepath, 'init.pickle'), 'wb') as F:
     pickle.dump({
@@ -80,13 +87,6 @@ for epoch_idx in np.arange(n_epochs):
                 'per-layer rates': per_layer_rates[-1] if (epoch_idx % rate_period == 0) else None,
                 'correction matrix': correction_matrices[-1] if (epoch_idx % correction_period == 0) else None}, F)
 
-final_W = Network.W.clone().cpu().squeeze().numpy()
-final_W_mask = Network.W.clone().cpu().squeeze().numpy()
-mean_dW = Network.mean_dW.clone().cpu().squeeze().numpy()
-
-with open(os.path.join(filepath, 'final.pickle'), 'wb') as F:
-    pickle.dump({
-            'final weight': final_W,
-            'final mask': final_W_mask,
-            'mean dW': mean_dW}, F)
+with open(os.path.join(filepath, 'final_network.pickle'), 'wb') as F:
+    pickle.dump(Network, F)
 

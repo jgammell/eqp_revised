@@ -55,9 +55,17 @@ class Network:
             self.bypass_mag = None
         else:
             assert False
-        assert type(hyperparameters['learning rate']) == float
-        assert hyperparameters['learning rate'] > 0
-        self.learning_rate = hyperparameters['learning rate']
+        if type(hyperparameters['learning rate']) == float:
+            assert hyperparameters['learning rate'] > 0
+            self.learning_rate = hyperparameters['learning rate']
+        elif type(hyperparameters['learning rate']) == list:
+            for lr in hyperparameters['learning rate']:
+                assert type(lr) == float
+                assert lr > 0
+            assert len(hyperparameters['learning rate']) == (len(self.layer_sizes)-1)
+            self.learning_rate = hyperparameters['learning rate']
+        else:
+            assert False
         assert type(hyperparameters['epsilon']) == float
         assert hyperparameters['epsilon'] > 0
         self.epsilon = hyperparameters['epsilon']
@@ -131,7 +139,13 @@ class Network:
         print('\tNetwork type: %s'%(self.network_type))
         print('\tBypass p: ' + ('n/a' if (self.bypass_p == None) else '%f'%(self.bypass_p)))
         print('\tBypass magnitude: ' + ('n/a' if (self.bypass_mag == None) else '%f'%(self.bypass_mag)))
-        print('\tLearning rate: %f'%(self.learning_rate))
+        print('\tLearning rate:', self.learning_rate)
+        if type(self.learning_rate) == list:
+            print('\t\tUsing per-layer rates.')
+        elif type(self.learning_rate) == float:
+            print('\t\tUsing a single global learning rate.')
+        else:
+            assert False
         print('\tEpsilon: %f'%(self.epsilon))
         print('\tBeta: %f'%(self.beta))
         print('\tFree iterations: %d'%(self.free_iterations))
@@ -214,19 +228,30 @@ class Network:
                         assert W_mask[row, col] == 1
                         existing_conn_indices.append([row, col])
             initial_length = len(existing_conn_indices)
-            for i in range(int(self.bypass_p*len(existing_conn_indices))):
-                assert len(potential_conn_indices) > 0
-                existing_location_index = self.rng.randint(len(existing_conn_indices))
-                existing_conn = existing_conn_indices[existing_location_index]
-                new_location_index = self.rng.randint(len(potential_conn_indices))
-                new_conn = potential_conn_indices[new_location_index]
-                W_mask[existing_conn[0], existing_conn[1]] = 0
-                W_mask[existing_conn[1], existing_conn[0]] = 0
-                W_mask[new_conn[0], new_conn[1]] = 1
-                W_mask[new_conn[1], new_conn[0]] = 1
-                del existing_conn_indices[existing_location_index]
-                del potential_conn_indices[new_location_index]
-                self.p_actual += 1
+            for idx, conn in enumerate(existing_conn_indices):
+                if self.rng.uniform(0, 1) < self.bypass_p:
+                    new_conn_idx = self.rng.randint(len(potential_conn_indices))
+                    new_conn = potential_conn_indices[new_conn_idx]
+                    W_mask[conn[0], conn[1]] = 0
+                    W_mask[conn[1], conn[0]] = 0
+                    W_mask[new_conn[0], new_conn[1]] = 1
+                    W_mask[new_conn[1], new_conn[0]] = 1
+                    potential_conn_indices.append(conn)
+                    del potential_conn_indices[new_conn_idx]
+                    self.p_actual += 1
+#            for i in range(int(self.bypass_p*len(existing_conn_indices))):
+#                assert len(potential_conn_indices) > 0
+#                existing_location_index = self.rng.randint(len(existing_conn_indices))
+#                existing_conn = existing_conn_indices[existing_location_index]
+#                new_location_index = self.rng.randint(len(potential_conn_indices))
+#                new_conn = potential_conn_indices[new_location_index]
+#                W_mask[existing_conn[0], existing_conn[1]] = 0
+#                W_mask[existing_conn[1], existing_conn[0]] = 0
+#                W_mask[new_conn[0], new_conn[1]] = 1
+#                W_mask[new_conn[1], new_conn[0]] = 1
+#                del existing_conn_indices[existing_location_index]
+#                del potential_conn_indices[new_location_index]
+#                self.p_actual += 1
             W += np.asarray(self.rng.uniform(low=-self.bypass_mag, high=self.bypass_mag, size=W.shape))
         elif self.network_type == 'SW_no_intra':
             existing_conn_indices = []
@@ -236,19 +261,31 @@ class Network:
                         assert W_mask[row, col] == 1
                         existing_conn_indices.append([row, col])
             initial_length = len(existing_conn_indices)
-            for i in range(int(self.bypass_p*len(existing_conn_indices))):
-                assert len(potential_conn_indices) > 0
-                existing_location_index = self.rng.randint(len(existing_conn_indices))
-                existing_conn = existing_conn_indices[existing_location_index]
-                new_location_index = self.rng.randint(len(potential_conn_indices))
-                new_conn = potential_conn_indices[new_location_index]
-                W_mask[existing_conn[0], existing_conn[1]] = 0
-                W_mask[existing_conn[1], existing_conn[0]] = 0
-                W_mask[new_conn[0], new_conn[1]] = 1
-                W_mask[new_conn[1], new_conn[0]] = 1
-                del existing_conn_indices[existing_location_index]
-                del potential_conn_indices[new_location_index]
-                self.p_actual += 1
+            for idx, conn in enumerate(existing_conn_indices):
+                if self.rng.uniform(0, 1) < self.bypass_p:
+                    new_conn_idx = self.rng.randint(len(potential_conn_indices))
+                    new_conn = potential_conn_indices[new_conn_idx]
+                    W_mask[conn[0], conn[1]] = 0
+                    W_mask[conn[1], conn[0]] = 0
+                    W_mask[new_conn[0], new_conn[1]] = 1
+                    W_mask[new_conn[1], new_conn[0]] = 1
+                    potential_conn_indices.append(conn)
+                    del potential_conn_indices[new_conn_idx]
+                    self.p_actual += 1
+            
+#            for i in range(int(self.bypass_p*len(existing_conn_indices))):
+#                assert len(potential_conn_indices) > 0
+#                existing_location_index = self.rng.randint(len(existing_conn_indices))
+#                existing_conn = existing_conn_indices[existing_location_index]
+#                new_location_index = self.rng.randint(len(potential_conn_indices))
+#                new_conn = potential_conn_indices[new_location_index]
+#                W_mask[existing_conn[0], existing_conn[1]] = 0
+#                W_mask[existing_conn[1], existing_conn[0]] = 0
+#                W_mask[new_conn[0], new_conn[1]] = 1
+#                W_mask[new_conn[1], new_conn[0]] = 1
+#                del existing_conn_indices[existing_location_index]
+#                del potential_conn_indices[new_location_index]
+#                self.p_actual += 1
             W += np.asarray(self.rng.uniform(low=-self.bypass_mag, high=self.bypass_mag, size=W.shape))
         else:
             assert False
@@ -330,12 +367,12 @@ class Network:
         term2 = torch.unsqueeze(rho(s_free_phase), dim=2)@torch.unsqueeze(rho(s_free_phase), dim=1)
         dW = (1/self.beta)*(term1-term2)
         dW *= self.W_mask
-        self.dW = torch.mean(dW, dim=0).unsqueeze(0)
+        self.dW = torch.mean(dW, dim=0)#.unsqueeze(0)
     
     def calculate_bias_update(self, s_free_phase, s_clamped_phase):
         dB = (1/self.beta)*(rho(s_clamped_phase)-rho(s_free_phase))
         dB[:, self.ix] = 0
-        self.dB = torch.mean(dB, dim=0).unsqueeze(0)
+        self.dB = torch.mean(dB, dim=0)#.unsqueeze(0)
     
     def train_batch(self, x, y, index, classification=False):
         self.use_persistent_particle(index)
@@ -356,8 +393,21 @@ class Network:
         self.s_clamped_phase = self.s.clone()
         self.calculate_weight_update(self.s_free_phase, self.s_clamped_phase)
         self.calculate_bias_update(self.s_free_phase, self.s_clamped_phase)
-        self.W += self.learning_rate*self.dW
-        self.B += self.learning_rate*self.dB
+        if type(self.learning_rate) == float:
+            self.W += self.learning_rate*self.dW
+            self.B += self.learning_rate*self.dB
+        elif type(self.learning_rate) == list:
+            dWlr = self.dW.clone().unsqueeze(0)
+            dBlr = self.dB.clone().unsqueeze(0)
+            for lr, conn in zip(self.learning_rate, self.interlayer_connections):
+                dWlr[conn!=0] *= lr
+            for lr, i, j in zip(self.learning_rate, self.layer_indices[1:-1], self.layer_indices[2:]):
+                dBlr[i:j] *= lr
+            dWlr = dWlr.tril(diagonal=-1)+dWlr.tril(diagonal=-1).transpose(1, 2)
+            self.W += dWlr
+            self.B += dBlr
+        else:
+            assert False
         return (cost, n_correct)
     
     def train_next_batch(self):
@@ -366,18 +416,43 @@ class Network:
         return n_correct if self.dataset.classification else cost
         
     def train_epoch(self):
-        self.mean_dW = torch.zeros(self.W.shape).to(self.device)
         self.training_error = 0
+        self.mean_dW = torch.zeros(self.W.shape).to(self.device)
+        self.per_layer_rates = []
         for batch in range(self.dataset.n_trainb):
             error = self.train_next_batch()
             if self.dataset.classification:
                 self.training_error += (self.batch_size-error)
             else:
                 self.training_error += error
-            self.mean_dW = self.dW/(batch+1) + (batch/(batch+1))*self.mean_dW
+            self.per_layer_rates.append([])
+            for conn in self.interlayer_connections:
+                correction = torch.norm((self.dW*conn)/torch.sqrt(torch.norm(self.W_mask*conn, p=1)))
+                self.per_layer_rates[-1].append(float(correction.cpu()))
+            self.mean_dW = torch.abs(self.dW)/(batch+1) + (batch/(batch+1))*self.mean_dW
             #print('\tBatch %d complete.'%(batch+1))
-        self.training_error /= (self.dataset.n_trainb*self.batch_size)
-    
+        if self.dataset.classification:
+            self.training_error /= (self.dataset.n_trainb*self.batch_size)
+        else:
+            self.training_error /= self.dataset.n_trainb
+
+    def calculate_training_error(self):
+        self.true_training_error = 0
+        for batch in range(self.dataset.n_trainb):
+            (index, (x, y)) = self.dataset.next_training_batch()
+            self.set_x_state(x)
+            self.use_persistent_particle(index)
+            self.evolve_to_equilibrium('free')
+            #self.update_persistent_particle(index)
+            if self.dataset.classification:
+                self.true_training_error += int(torch.eq(torch.argmax(self.s[:, self.iy], dim=1), torch.argmax(y, dim=1)).sum())
+            else:
+                self.true_training_error += float(torch.mean(self.calc_C(y)))
+        if self.dataset.classification:
+            self.true_training_error = 1 - (self.true_training_error/(self.dataset.n_trainb*self.batch_size))
+        else:
+            self.true_training_error /= (self.dataset.n_trainb)#*self.batch_size)
+
     def calculate_test_error(self):
         self.test_error = 0
         for batch in range(self.dataset.n_testb):
@@ -392,7 +467,8 @@ class Network:
                 self.test_error += float(torch.mean(self.calc_C(y)))
         if self.dataset.classification:
             self.test_error = 1 - (self.test_error/(self.dataset.n_testb*self.batch_size))
-        
+        else:
+            self.test_error /= (self.dataset.n_testb)#*self.batch_size)
         
         
         

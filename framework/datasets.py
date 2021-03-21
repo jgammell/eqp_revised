@@ -51,6 +51,7 @@ class MNIST(Dataset):
                 target_transform=None)
         test_loader = torch.utils.data.DataLoader(dataset=test_examples, batch_size=batch_size, shuffle=False)
         raw_data = [out for out in test_loader]
+        np.random.shuffle(raw_data)
         self.x_test = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
         self.y_test = []
         for [_, y] in raw_data:
@@ -89,6 +90,7 @@ class FashionMNIST(Dataset):
                 target_transform=None)
         test_loader = torch.utils.data.DataLoader(dataset=test_examples, batch_size=batch_size, shuffle=False)
         raw_data = [out for out in test_loader]
+        np.random.shuffle(raw_data)
         self.x_test = [d[0].to(device).reshape([batch_size, 28**2]) for d in raw_data]
         self.y_test = []
         for [_, y] in raw_data:
@@ -106,13 +108,14 @@ class Diabetes(Dataset):
         self.batch_size = batch_size
         self.classification = False
         (x_raw, y_raw) = sklearn.datasets.load_diabetes(return_X_y=True, as_frame=False)
-        for idx in range(len(x_raw)):
-            x_raw[idx] -= np.min(x_raw[idx])
-            x_raw[idx] /= np.max(x_raw[idx])
+        for idx in range(x_raw.shape[1]):
+        	x_raw[:, idx] -= np.min(x_raw[:, idx])
+        	x_raw[:, idx] /= np.max(x_raw[:, idx])
         y_raw -= np.min(y_raw)
         y_raw /= np.max(y_raw)
-        np.random.shuffle(x_raw)
-        np.random.shuffle(y_raw)
+        temp = list(zip(x_raw, y_raw))
+        np.random.shuffle(temp)
+        (x_raw, y_raw) = zip(*temp)
         self.x_train = []
         self.y_train = []
         for idx in np.arange(int(400/batch_size)):
@@ -125,8 +128,8 @@ class Diabetes(Dataset):
         for idx in np.arange(int(400/batch_size), int(442/batch_size)):
             x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
             y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
-            self.x_test.append(x_batch)
-            self.y_test.append(y_batch)
+            self.x_test.append(torch.from_numpy(x_batch).to(device))
+            self.y_test.append(torch.from_numpy(y_batch).to(device).unsqueeze(1))
         Dataset.__init__(self)
 
 class Wine(Dataset):
@@ -137,14 +140,18 @@ class Wine(Dataset):
         self.n_out = 3
         self.batch_size = batch_size
         self.classification = True
-        (x_raw, y_raw) = sklearn.datasets.load_wine(return_X_y=True, as_frame=False)
-        for idx in range(len(x_raw)):
-            x_raw[idx] -= np.min(x_raw[idx])
-            x_raw[idx] /= np.max(x_raw[idx])
-            y_raw[idx] -= np.min(y_raw[idx])
-            y_raw[idx] /= np.max(y_raw[idx])
-        np.random.shuffle(x_raw)
-        np.random.shuffle(y_raw)
+        (x_raw, y_raw_idx) = sklearn.datasets.load_wine(return_X_y=True, as_frame=False)
+        y_raw = []
+        for y in y_raw_idx:
+            y_raw.append(np.zeros(self.n_out))
+            y_raw[-1][y] = 1
+        y_raw = np.array(y_raw)
+        for col_idx in range(x_raw.shape[1]):
+            x_raw[:, col_idx] -= np.min(x_raw[:, col_idx])
+            x_raw[:, col_idx] /= np.max(x_raw[:, col_idx])
+        temp = list(zip(x_raw, y_raw))
+        np.random.shuffle(temp)
+        (x_raw, y_raw) = zip(*temp)
         self.x_train = []
         self.y_train = []
         for idx in np.arange(int(150/batch_size)):
@@ -157,7 +164,7 @@ class Wine(Dataset):
         for idx in np.arange(int(150/batch_size), int(178/batch_size)):
             x_batch = np.stack(x_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
             y_batch = np.stack(y_raw[batch_size*idx:batch_size*(idx+1)], axis=0)
-            self.x_test.append(x_batch)
-            self.y_test.append(y_batch)
+            self.x_test.append(torch.from_numpy(x_batch).to(device))
+            self.y_test.append(torch.from_numpy(y_batch).to(device))
         Dataset.__init__(self)
         

@@ -1,4 +1,6 @@
-datasets/
-results/
 *.project
 *.pydevproject
+*.pickle
+*.png
+datasets/*
+results/*/*
